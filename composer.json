@@ -2,18 +2,28 @@
     "name": "clubautomation/cron",
     "description": "Cron manager and processor",
     "type": "project",
+    "license": "proprietary",
+    "minimum-stability": "dev",
     "require": {
         "react/event-loop": "^1.1",
         "react/http": "^0.8.4",
         "react/child-process": "^0.6.1",
-        "symfony/dotenv": "^4.3"
+        "symfony/dotenv": "^4.3",
+        "ext-json": "*"
+    }
+    ,
+    "require-dev": {
+        "roave/security-advisories": "dev-master"
     },
-    "license": "proprietary",
     "authors": [
         {
             "name": "red",
             "email": "ared@clubautomation.com"
         }
     ],
-    "minimum-stability": "dev"
+    "autoload": {
+        "psr-4": {
+            "Cron\\": "src"
+        }
+    }
 }
