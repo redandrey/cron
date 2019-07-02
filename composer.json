@@ -1,0 +1,19 @@
+{
+    "name": "clubautomation/cron",
+    "description": "Cron manager and processor",
+    "type": "project",
+    "require": {
+        "react/event-loop": "^1.1",
+        "react/http": "^0.8.4",
+        "react/child-process": "^0.6.1",
+        "symfony/dotenv": "^4.3"
+    },
+    "license": "proprietary",
+    "authors": [
+        {
+            "name": "red",
+            "email": "ared@clubautomation.com"
+        }
+    ],
+    "minimum-stability": "dev"
+}
