@@ -19,9 +19,6 @@ $loop = Factory::create();
 $monitoringClient = new MonitoringClient($config, $globalState);
 $monitoringClient->start($loop);
 
-echo $config->getMonitoringSockAddr();
-echo "\n\n";
-
 $loop->run();
 
 echo "EXIT\n";

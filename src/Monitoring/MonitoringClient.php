@@ -22,6 +22,9 @@ class MonitoringClient
     /** @var GlobalState */
     protected $globalState;
 
+    /** @var LoopInterface */
+    protected $globalLoop;
+
     /** @var SocketServer */
     protected $socket;
 
@@ -59,9 +62,10 @@ class MonitoringClient
     public function start(LoopInterface $loop): void
     {
         if ($this->isStarted) {
-            throw new \RuntimeException('Monitoring client already started');
+            throw new \RuntimeException('Monitoring client: already started');
         }
 
+        $this->globalLoop = $loop;
         $socket = new SocketServer($this->config->getMonitoringSockAddr(), $loop);
 
         $server = new HttpServer(function (ServerRequestInterface $request) {
@@ -70,7 +74,9 @@ class MonitoringClient
             }
 
             $this->globalState->getMonitoringClientState()->registerSupervisorVisit();
-            echo sprintf("Monitoring client: request from %s\n", $request->getServerParams()['REMOTE_ADDR']);
+            $this->log('request from %s', $request->getServerParams()['REMOTE_ADDR']);
+
+            $this->restartVisitCheckerTimer();
 
             switch ($request->getUri()->getPath()) {
                 case '/state':
@@ -86,8 +92,10 @@ class MonitoringClient
         $server->listen($socket);
 
         $this->isStarted = true;
+        $this->log('STARTED at %s', $this->config->getMonitoringSockAddr());
+
         $this->globalState->getMonitoringClientState()->reset();
-        $this->visitCheckerTimer = $this->createVisitCheckerTimer($loop);
+        $this->startVisitCheckerTimer();
     }
 
     /**
@@ -124,21 +132,62 @@ class MonitoringClient
         );
     }
 
-    protected function createVisitCheckerTimer(LoopInterface $loop): TimerInterface
+    protected function startVisitCheckerTimer(): void
     {
+        if ($this->visitCheckerTimer instanceof TimerInterface) {
+            $this->log('??????');
+            return;
+        }
+
         $state = $this->globalState->getMonitoringClientState();
-        $checker = static function () use ($state) {
+        $checker = function () use ($state) {
             if ($state->isUnattended()) {
-                echo sprintf(
-                    "Monitoring client is unattended since %0.3f\n",
+                $this->log(
+                    'I am unattended since %0.3f',
                     $state->getLastVisitMicrotime()
                 );
             }
         };
 
-        return $loop->addPeriodicTimer(
+        $this->visitCheckerTimer = $this->globalLoop->addPeriodicTimer(
             $state->getUnattendedTimeout(),
             $checker
         );
+        $this->log('visit checker timer STARTed');
+    }
+
+    protected function cancelVisitCheckerTimer(): void
+    {
+        if (! $this->visitCheckerTimer instanceof TimerInterface) {
+            return;
+        }
+
+        $this->globalLoop->cancelTimer($this->visitCheckerTimer);
+        $this->visitCheckerTimer = null;
+        $this->log('visit checker timer STOPped');
+    }
+
+    protected function restartVisitCheckerTimer(): void
+    {
+        $this->cancelVisitCheckerTimer();
+        $this->startVisitCheckerTimer();
+    }
+
+    /**
+     * @TODO make a logger
+     *
+     * @param string $message
+     * @param mixed  ...$params
+     */
+    protected function log(string $message, ...$params): void
+    {
+        $message = vsprintf($message, $params);
+        try {
+            $now = (new \DateTimeImmutable())->format('H:m:s');
+        } catch (\Exception $e) {
+            $now = '??:??:??';
+        }
+
+        echo sprintf("%s | Monitoring client | %s\n", $now, $message);
     }
 }
