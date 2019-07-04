@@ -2,6 +2,8 @@
 
 namespace Cron\Monitoring;
 
+use Cron\Common\AbstractAppRole;
+use Cron\Common\Role;
 use Cron\Config\Config;
 use Cron\State\GlobalState;
 use Psr\Http\Message\ServerRequestInterface;
@@ -14,7 +16,7 @@ use React\Socket\Server as SocketServer;
 /**
  * Class Client
  */
-class MonitoringClient
+class MonitoringClient extends AbstractAppRole implements MonitoringClientInterface
 {
     /** @var Config */
     protected $config;
@@ -23,7 +25,7 @@ class MonitoringClient
     protected $globalState;
 
     /** @var LoopInterface */
-    protected $globalLoop;
+    protected $loop;
 
     /** @var SocketServer */
     protected $socket;
@@ -31,42 +33,25 @@ class MonitoringClient
     /** @var HttpServer */
     protected $httpServer;
 
-    /** @var bool */
-    protected $isStarted = false;
-
     /** @var TimerInterface */
     protected $visitCheckerTimer;
 
-    /**
-     * Client constructor.
-     *
-     * @param Config        $config
-     * @param GlobalState   $globalState
-     */
-    public function __construct(
-        Config $config,
-        GlobalState $globalState
-    ) {
-        $this->config = $config;
-        $this->globalState = $globalState;
+    /** @inheritDoc */
+    public static function role(): Role
+    {
+        return Role::monitoringClient();
     }
 
-    /**
-     * @return bool
-     */
-    public function isStarted(): bool
+    /** @inheritDoc */
+    public static function dependsOn(): array
     {
-        return $this->isStarted;
+        return [];
     }
 
-    public function start(LoopInterface $loop): void
+    /** @inheritDoc */
+    protected function init(): void
     {
-        if ($this->isStarted) {
-            throw new \RuntimeException('Monitoring client: already started');
-        }
-
-        $this->globalLoop = $loop;
-        $socket = new SocketServer($this->config->getMonitoringSockAddr(), $loop);
+        $socket = new SocketServer($this->config->getMonitoringSockAddr(), $this->loop);
 
         $server = new HttpServer(function (ServerRequestInterface $request) {
             if (! $this->isRequestAllowed()) {
@@ -91,7 +76,6 @@ class MonitoringClient
 
         $server->listen($socket);
 
-        $this->isStarted = true;
         $this->log('STARTED at %s', $this->config->getMonitoringSockAddr());
 
         $this->globalState->getMonitoringClientState()->reset();
@@ -149,7 +133,7 @@ class MonitoringClient
             }
         };
 
-        $this->visitCheckerTimer = $this->globalLoop->addPeriodicTimer(
+        $this->visitCheckerTimer = $this->loop->addPeriodicTimer(
             $state->getUnattendedTimeout(),
             $checker
         );
@@ -162,32 +146,14 @@ class MonitoringClient
             return;
         }
 
-        $this->globalLoop->cancelTimer($this->visitCheckerTimer);
+        $this->loop->cancelTimer($this->visitCheckerTimer);
         $this->visitCheckerTimer = null;
-        $this->log('visit checker timer STOPped');
+        $this->log('visit checker timer stopped');
     }
 
     protected function restartVisitCheckerTimer(): void
     {
         $this->cancelVisitCheckerTimer();
         $this->startVisitCheckerTimer();
-    }
-
-    /**
-     * @TODO make a logger
-     *
-     * @param string $message
-     * @param mixed  ...$params
-     */
-    protected function log(string $message, ...$params): void
-    {
-        $message = vsprintf($message, $params);
-        try {
-            $now = (new \DateTimeImmutable())->format('H:m:s');
-        } catch (\Exception $e) {
-            $now = '??:??:??';
-        }
-
-        echo sprintf("%s | Monitoring client | %s\n", $now, $message);
     }
 }

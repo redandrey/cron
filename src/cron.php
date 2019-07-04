@@ -2,23 +2,18 @@
 
 namespace Cron;
 
-use Cron\Config\Config;
+use Cron\Common\App;
+use Cron\Data\RedisDataStorage;
+use Cron\JobManager\JobManager;
 use Cron\Monitoring\MonitoringClient;
-use Cron\State\GlobalState;
-use React\EventLoop\Factory;
 
 require __DIR__ . '/../vendor/autoload.php';
 
 define('PROJECT_ROOT', __DIR__ . '/..');
 
-$config = new Config();
-$globalState = new GlobalState();
+$app = new App('Cron worker manager for server '. gethostname());
+$app->register(MonitoringClient::class);
+$app->register(RedisDataStorage::class);
+$app->register(JobManager::class);
 
-$loop = Factory::create();
-
-$monitoringClient = new MonitoringClient($config, $globalState);
-$monitoringClient->start($loop);
-
-$loop->run();
-
-echo "EXIT\n";
+$app->run();
