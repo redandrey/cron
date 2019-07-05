@@ -75,8 +75,6 @@ class RedisDataStorage extends AbstractAppRole implements DataStorageRole
             return;
         }
 
-        $this->log('MEM: %d', memory_get_usage());
-
         /** @var Promise $promise */
         /** @noinspection PhpUndefinedMethodInspection */
         $promise = $this->client->rpop($this->jobQueueName);
