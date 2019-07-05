@@ -2,9 +2,9 @@
 
 namespace Cron\Common;
 
-use Cron\Data\DataStorageInterface;
-use Cron\JobManager\JobManagerInterface;
-use Cron\Monitoring\MonitoringClientInterface;
+use Cron\Data\DataStorageRole;
+use Cron\JobManager\JobManagerRole;
+use Cron\Monitoring\MonitoringClientRole;
 
 /**
  * Class BlockType
@@ -13,9 +13,9 @@ class Role
 {
     protected const BASE_ROLE_INTERFACE = AppRoleInterface::class;
 
-    protected const MONITORING_CLIENT = MonitoringClientInterface::class;
-    protected const DATA_STORAGE      = DataStorageInterface::class;
-    protected const JOB_MANAGER       = JobManagerInterface::class;
+    protected const MONITORING_CLIENT = MonitoringClientRole::class;
+    protected const DATA_STORAGE      = DataStorageRole::class;
+    protected const JOB_MANAGER       = JobManagerRole::class;
 
     protected const ROLES = [
         self::MONITORING_CLIENT => 'Monitoring Client',

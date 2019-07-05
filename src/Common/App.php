@@ -3,23 +3,29 @@
 namespace Cron\Common;
 
 use Cron\Config\Config;
-use Cron\State\GlobalState;
+use Evenement\EventEmitterInterface;
+use Evenement\EventEmitterTrait;
 use React\EventLoop\Factory as LoopFactory;
 use React\EventLoop\LoopInterface;
 
 /**
  * Class App
  */
-class App
+class App implements EventEmitterInterface, StateAwareInterface
 {
+    /**
+     * EVENT EMITTER TRAIT
+     */
+    use EventEmitterTrait;
+
     /** @var string  */
     protected $name;
 
+    /** @var float */
+    protected $startedAt;
+
     /** @var Config */
     protected $config;
-
-    /** @var GlobalState */
-    protected $state;
 
     /** @var LoopInterface */
     protected $loop;
@@ -35,10 +41,9 @@ class App
     public function __construct(string $name)
     {
         $this->name = $name;
+        $this->startedAt = microtime(true);
 
         $this->config = new Config();
-        $this->state = new GlobalState();
-
         $this->loop = LoopFactory::create();
     }
 
@@ -55,12 +60,33 @@ class App
         return $this->config;
     }
 
-    /**
-     * @return GlobalState
-     */
-    public function getState(): GlobalState
+    /** @inheritDoc */
+    public function getState(): array
     {
-        return $this->state;
+        $state = [
+            'name'       => $this->name,
+            'host'       => gethostname(),
+            'started_at' => $this->startedAt,
+            'roles'      => [],
+        ];
+
+        foreach ($this->roles as $roleType => $roleInstance) {
+            $role = $roleInstance::role();
+            $dependsOn = array_map(
+                static function (Role $requiredRole) { return $requiredRole->getType(); },
+                $roleInstance::dependsOn()
+            );
+
+            $state['roles'][] = [
+                'name'       => $role->getName(),
+                'type'       => $role->getType(),
+                'instance'   => get_class($roleInstance),
+                'depends_on' => $dependsOn,
+                'state'      => $roleInstance->getState(),
+            ];
+        }
+
+        return $state;
     }
 
     /**

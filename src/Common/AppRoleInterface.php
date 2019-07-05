@@ -16,4 +16,9 @@ interface AppRoleInterface
      * @return Role[]
      */
     public static function dependsOn(): array;
+
+    /**
+     * @return array
+     */
+    public function getState(): array;
 }

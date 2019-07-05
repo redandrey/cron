@@ -8,7 +8,7 @@ use React\Promise\Promise;
 /**
  * Interface DataInterface
  */
-interface DataStorageInterface extends AppRoleInterface
+interface DataStorageRole extends AppRoleInterface
 {
     /**
      * @return Promise

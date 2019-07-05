@@ -5,7 +5,6 @@ namespace Cron\Monitoring;
 use Cron\Common\AbstractAppRole;
 use Cron\Common\Role;
 use Cron\Config\Config;
-use Cron\State\GlobalState;
 use Psr\Http\Message\ServerRequestInterface;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
@@ -16,13 +15,10 @@ use React\Socket\Server as SocketServer;
 /**
  * Class Client
  */
-class MonitoringClient extends AbstractAppRole implements MonitoringClientInterface
+class MonitoringClient extends AbstractAppRole implements MonitoringClientRole
 {
     /** @var Config */
     protected $config;
-
-    /** @var GlobalState */
-    protected $globalState;
 
     /** @var LoopInterface */
     protected $loop;
@@ -35,6 +31,15 @@ class MonitoringClient extends AbstractAppRole implements MonitoringClientInterf
 
     /** @var TimerInterface */
     protected $visitCheckerTimer;
+
+    /** @var int  */
+    protected $visitsCount = 0;
+
+    /** @var float */
+    protected $lastVisitTime;
+
+    /** @var int */
+    protected $idleTimeout;
 
     /** @inheritDoc */
     public static function role(): Role
@@ -51,15 +56,19 @@ class MonitoringClient extends AbstractAppRole implements MonitoringClientInterf
     /** @inheritDoc */
     protected function init(): void
     {
-        $socket = new SocketServer($this->config->getMonitoringSockAddr(), $this->loop);
+        $this->idleTimeout = $this->config->getMonitoringClientIdleTimeout();
+        $this->lastVisitTime = microtime(true);
+
+        $socket = new SocketServer($this->config->getMonitoringClientSockAddr(), $this->loop);
 
         $server = new HttpServer(function (ServerRequestInterface $request) {
             if (! $this->isRequestAllowed()) {
                 return new Response(401);
             }
 
-            $this->globalState->getMonitoringClientState()->registerSupervisorVisit();
             $this->log('request from %s', $request->getServerParams()['REMOTE_ADDR']);
+            $this->visitsCount++;
+            $this->lastVisitTime = microtime(true);
 
             $this->restartVisitCheckerTimer();
 
@@ -76,14 +85,23 @@ class MonitoringClient extends AbstractAppRole implements MonitoringClientInterf
 
         $server->listen($socket);
 
-        $this->log('STARTED at %s', $this->config->getMonitoringSockAddr());
+        $this->log('STARTED at %s', $this->config->getMonitoringClientSockAddr());
 
-        $this->globalState->getMonitoringClientState()->reset();
         $this->startVisitCheckerTimer();
     }
 
+    /** @inheritDoc */
+    public function getState(): array
+    {
+        return [
+            'visits_count'  => $this->visitsCount,
+            'idle_timeout'  => $this->idleTimeout,
+            'is_unattended' => $this->isUnattended(),
+        ];
+    }
+
     /**
-     * @noinspection PhpUnusedParameterInspection
+     * http client authentication
      *
      * @return bool
      */
@@ -100,7 +118,7 @@ class MonitoringClient extends AbstractAppRole implements MonitoringClientInterf
         return new Response(
             200,
             ['Content-Type' => 'application/json'],
-            json_encode(['state' => 'OK'], JSON_PRETTY_PRINT)
+            json_encode($this->app->getState(), JSON_PRETTY_PRINT)
         );
     }
 
@@ -123,18 +141,14 @@ class MonitoringClient extends AbstractAppRole implements MonitoringClientInterf
             return;
         }
 
-        $state = $this->globalState->getMonitoringClientState();
-        $checker = function () use ($state) {
-            if ($state->isUnattended()) {
-                $this->log(
-                    'I am unattended since %0.3f',
-                    $state->getLastVisitMicrotime()
-                );
+        $checker = function () {
+            if ($this->isUnattended()) {
+                $this->log('I am unattended since %0.3f', $this->lastVisitTime);
             }
         };
 
         $this->visitCheckerTimer = $this->loop->addPeriodicTimer(
-            $state->getUnattendedTimeout(),
+            $this->idleTimeout,
             $checker
         );
         $this->log('visit checker timer STARTed');
@@ -155,5 +169,13 @@ class MonitoringClient extends AbstractAppRole implements MonitoringClientInterf
     {
         $this->cancelVisitCheckerTimer();
         $this->startVisitCheckerTimer();
+    }
+
+    /**
+     * @return bool
+     */
+    protected function isUnattended(): bool
+    {
+        return $this->idleTimeout < \microtime(true) - $this->lastVisitTime;
     }
 }

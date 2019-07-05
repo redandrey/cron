@@ -8,7 +8,10 @@ namespace Cron\Config;
 class Config
 {
     /** @var string */
-    protected $monitoringSockAddr;
+    protected $monitoringClientSockAddr;
+
+    /** @var int */
+    protected $monitoringClientIdleTimeout;
 
     /** @var string */
     protected $redisAddr;
@@ -16,15 +19,23 @@ class Config
     /** @var string */
     protected $redisJobQueueName;
 
+    /** @var int */
+    protected $jobManagerPoolSize;
+
     /**
      * Config constructor.
      */
     public function __construct()
     {
         $this->processEnvFiles();
-        $this->monitoringSockAddr = getenv(EnvParams::MONITORING_SOCK_ADDR);
+
+        $this->monitoringClientSockAddr = getenv(EnvParams::MONITORING_CLIENT_SOCK_ADDR);
+        $this->monitoringClientIdleTimeout = (int)getenv(EnvParams::MONITORING_CLIENT_IDLE_TIMEOUT);
+
         $this->redisAddr = getenv(EnvParams::REDIS_ADDR);
         $this->redisJobQueueName = getenv(EnvParams::REDIS_JOB_QUEUE_NAME);
+
+        $this->jobManagerPoolSize = (int)getenv(EnvParams::JOB_MANAGER_POOL_SIZE);
     }
 
     protected function processEnvFiles(): void
@@ -36,9 +47,9 @@ class Config
     /**
      * @return string
      */
-    public function getMonitoringSockAddr(): string
+    public function getMonitoringClientSockAddr(): string
     {
-        return $this->monitoringSockAddr;
+        return $this->monitoringClientSockAddr;
     }
 
     /**
@@ -55,5 +66,21 @@ class Config
     public function getRedisJobQueueName(): string
     {
         return $this->redisJobQueueName;
+    }
+
+    /**
+     * @return int
+     */
+    public function getJobManagerPoolSize(): int
+    {
+        return $this->jobManagerPoolSize;
+    }
+
+    /**
+     * @return int
+     */
+    public function getMonitoringClientIdleTimeout(): int
+    {
+        return $this->monitoringClientIdleTimeout;
     }
 }

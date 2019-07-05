@@ -7,7 +7,7 @@ use Cron\Common\AppRoleInterface;
 /**
  * Interface MonitoringClientInterface
  */
-interface MonitoringClientInterface extends AppRoleInterface
+interface MonitoringClientRole extends AppRoleInterface
 {
 
 }

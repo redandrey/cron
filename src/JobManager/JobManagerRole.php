@@ -7,7 +7,7 @@ use Cron\Common\AppRoleInterface;
 /**
  * Interface JobManagerInterface
  */
-interface JobManagerInterface extends AppRoleInterface
+interface JobManagerRole extends AppRoleInterface
 {
 
 }

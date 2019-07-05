@@ -3,7 +3,6 @@
 namespace Cron\Common;
 
 use Cron\Config\Config;
-use Cron\State\GlobalState;
 use React\EventLoop\LoopInterface;
 
 /**
@@ -16,9 +15,6 @@ abstract class AbstractAppRole implements AppRoleInterface
 
     /** @var Config */
     protected $config;
-
-    /** @var GlobalState */
-    protected $globalState;
 
     /** @var LoopInterface */
     protected $loop;
@@ -33,10 +29,9 @@ abstract class AbstractAppRole implements AppRoleInterface
      */
     public function __construct(App $app)
     {
-        $this->app = $app;
+        $this->app    = $app;
         $this->config = $app->getConfig();
-        $this->globalState = $app->getState();
-        $this->loop = $app->getLoop();
+        $this->loop   = $app->getLoop();
 
         $this->init();
     }
