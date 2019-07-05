@@ -12,7 +12,7 @@ use React\EventLoop\TimerInterface;
  */
 class JobManager extends AbstractAppRole implements JobManagerRole
 {
-    protected const POLL_INTERVAL = 1; // TODO move to the config
+    protected const NEW_JOBS_REQUEST_INTERVAL = 2; // TODO move to the config
 
     /** @var DataStorageRole */
     protected $dataStorage;
@@ -22,13 +22,6 @@ class JobManager extends AbstractAppRole implements JobManagerRole
 
     /** @var bool  */
     protected $isPaused = false;
-
-    /**
-     * TODO this is a temporary solution. Remove when `Timer->pause()` will be realized
-     *
-     * @var bool
-     */
-    protected $isReadingData = false;
 
     /** @var \SplObjectStorage<Process> */
     protected $processPool;
@@ -56,16 +49,23 @@ class JobManager extends AbstractAppRole implements JobManagerRole
     /** @inheritDoc */
     protected function init(): void
     {
-        $loop = $this->app->getLoop();
         $this->dataStorage = $this->app->getRole(Role::dataStorage());
         $this->processPool = new \SplObjectStorage();
         $this->processPoolSize = $this->config->getJobManagerPoolSize();
 
-        $this->pollTimer = $loop->addPeriodicTimer(self::POLL_INTERVAL, function () {
-            $this->onPollTimer();
+        $this->pollTimer = $this->app->getLoop()->addPeriodicTimer(
+            self::NEW_JOBS_REQUEST_INTERVAL,
+            function () {
+                $this->onPollTimer();
+            }
+        );
+
+        $this->app->on(DataStorageRole::EVENT_NEW_JOB, function ($data) {
+            $this->onNewJobReceived($data);
         });
     }
 
+    /** @inheritDoc */
     public function getState(): array
     {
         $state = [
@@ -88,43 +88,47 @@ class JobManager extends AbstractAppRole implements JobManagerRole
         return $state;
     }
 
-    protected function onPollTimer(): void
-    {
-        if ($this->isPaused || $this->isReadingData) {
-            return;
-        }
-
-        $freeSlotsCount = $this->getFreeSlotsCount();
-        if ($freeSlotsCount === 0) {
-            $this->log('no free slots');
-            return;
-        }
-
-        $this->log('%d free slots in the process pool', $freeSlotsCount);
-
-        // TODO pause poll timer
-        $this->isReadingData = true;
-
-        $promise = $this->dataStorage->getJob();
-        $promise->then(function ($data) {
-            if ($data !== null) {
-                $this->startNewProcess($data);
-            }
-        });
-        $promise->always(function () {
-            $this->isReadingData = false;
-            // TODO resume poll timer
-        });
-    }
-
+    /**
+     * @return int
+     */
     protected function getFreeSlotsCount(): int
     {
         return $this->processPoolSize - $this->processPool->count();
     }
 
-    protected function startNewProcess($jobId): void
+    /**
+     *
+     */
+    protected function onPollTimer(): void
     {
-        $job = new Job($jobId);
+        if ($this->isPaused) {
+            return;
+        }
+
+        $this->emitNeedJobsEvent();
+    }
+
+    /**
+     * @param $data
+     */
+    protected function onNewJobReceived($data): void
+    {
+        try {
+            $job = new Job($data);
+        } catch (\Throwable $e) {
+            $this->log($e->getMessage());
+            // TODO mark the job as corrupted and move it back to a storage
+            return;
+        }
+
+        $this->attachProcess($job);
+    }
+
+    /**
+     * @param Job $job
+     */
+    protected function attachProcess(Job $job): void
+    {
         $process = new Process($job, ++$this->processedJobsCounter);
 
         $process->on('exit', function (int $exitCode, ?int $terminationSignal) use ($process) {
@@ -155,7 +159,7 @@ class JobManager extends AbstractAppRole implements JobManagerRole
             $process->getId(),
             $process->getJob()->getId()
         );
-        $this->processPool->detach($process);
+        $this->detachProcess($process);
     }
 
     /**
@@ -168,8 +172,37 @@ class JobManager extends AbstractAppRole implements JobManagerRole
             $process->getId(),
             $process->getJob()->getId()
         );
-        $this->processPool->detach($process);
+        $this->detachProcess($process);
 
         // TODO view the number of attempts to complete the job and return it to the data storage
+    }
+
+    /**
+     * @param Process $process
+     */
+    protected function detachProcess(Process $process): void
+    {
+        // TODO restart the poll timer
+
+        $this->processPool->detach($process);
+        $this->emitNeedJobsEvent();
+
+        gc_collect_cycles(); // without this line, memory slowly leaks. Don't understand why
+    }
+
+    protected function emitNeedJobsEvent(): void
+    {
+        $freeSlotsCount = $this->getFreeSlotsCount();
+        if ($freeSlotsCount <= 0) {
+            $this->log('no free slots');
+            return;
+        }
+
+        $this->log('%d free slots in the process pool', $freeSlotsCount);
+
+
+        $this->app->getLoop()->futureTick(function () {
+            $this->app->emit(DataStorageRole::EVENT_NEED_JOBS, [$this->getFreeSlotsCount()]);
+        });
     }
 }

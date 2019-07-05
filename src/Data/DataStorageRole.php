@@ -3,15 +3,12 @@
 namespace Cron\Data;
 
 use Cron\Common\AppRoleInterface;
-use React\Promise\Promise;
 
 /**
  * Interface DataInterface
  */
 interface DataStorageRole extends AppRoleInterface
 {
-    /**
-     * @return Promise
-     */
-    public function getJob(): Promise;
+    public const EVENT_NEW_JOB = 'new_job';
+    public const EVENT_NEED_JOBS = 'need_jobs';
 }

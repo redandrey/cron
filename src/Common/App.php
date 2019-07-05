@@ -67,6 +67,10 @@ class App implements EventEmitterInterface, StateAwareInterface
             'name'       => $this->name,
             'host'       => gethostname(),
             'started_at' => $this->startedAt,
+            'memory'     => [
+                'current' => memory_get_usage(),
+                'peak'    => memory_get_peak_usage(),
+            ],
             'roles'      => [],
         ];
 
