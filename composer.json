@@ -6,7 +6,7 @@
     "minimum-stability": "dev",
     "require": {
         "react/event-loop": "^1.1",
-        "react/http": "^0.8.4",
+        "react/http": "^1.7.0",
         "react/child-process": "^0.6.1",
         "symfony/dotenv": "^4.3",
         "ext-json": "*",
